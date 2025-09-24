@@ -49,7 +49,7 @@ public class CustomerController {
         }
     }
 
-    // Added By : Drithi Chopra
+    // Added By : Paras Kumar Sharma
     // Date Added : 2025-08-26
     @PostMapping
     public ResponseEntity<Customer> createCustomer(@RequestBody Customer customer) {
@@ -79,12 +79,14 @@ public class CustomerController {
     }
 
     // Added By : Paras Kumar Sharma
-    // Date Added : 2025-08-30
-    @PatchMapping("/{id}")
-    public ResponseEntity<Customer> patchCustomer(@PathVariable Long id,
-                                                  @RequestBody Customer customerDetails) {
+    // Date Added : 2025-09-19
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<Customer> updateCustomerStatus(@PathVariable Long id,
+                                                        @RequestBody java.util.Map<String,
+                                                                String> request) {
         try {
-            return customerService.patchCustomer(id, customerDetails)
+            String status = request.get("status");
+            return customerService.updateCustomerStatus(id, status)
                     .map(ResponseEntity::ok)
                     .orElse(ResponseEntity.notFound().build());
         } catch (Exception e) {

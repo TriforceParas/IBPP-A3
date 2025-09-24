@@ -24,7 +24,7 @@ public class CustomerService {
         return customerRepository.findById(id);
     }
 
-    // Added By : Drithi Chopra
+    // Added By : Paras Kumar Sharma
     // Date Added : 2025-08-26
     public Customer createCustomer(Customer customer) {
         return customerRepository.save(customer);
@@ -43,21 +43,10 @@ public class CustomerService {
     }
 
     // Added By : Paras Kumar Sharma
-    // Date Added : 2025-08-30
-    public Optional<Customer> patchCustomer(Long id, Customer customerDetails) {
+    // Date Added : 2025-09-12
+    public Optional<Customer> updateCustomerStatus(Long id, String status) {
         return customerRepository.findById(id).map(customer -> {
-            if (customerDetails.getName() != null) {
-                customer.setName(customerDetails.getName());
-            }
-            if (customerDetails.getAddress() != null) {
-                customer.setAddress(customerDetails.getAddress());
-            }
-            if (customerDetails.getPhoneNo() != null) {
-                customer.setPhoneNo(customerDetails.getPhoneNo());
-            }
-            if (customerDetails.getEmail() != null) {
-                customer.setEmail(customerDetails.getEmail());
-            }
+            customer.setVerificationStatus(status);
             return customerRepository.save(customer);
         });
     }

@@ -12,7 +12,19 @@ export interface Customer {
   address: string;
   phoneNo: string;
   email: string;
+  verificationStatus?: string;
 }
+
+// Status options for verification
+export const VERIFICATION_STATUS_OPTIONS = [
+  'Not Verified',
+  'Verified', 
+  'Fraud', 
+  'Suspicious', 
+  'Black Listed'
+] as const;
+
+export type VerificationStatus = typeof VERIFICATION_STATUS_OPTIONS[number];
 
 // API service class
 class CustomerService {
@@ -36,9 +48,9 @@ class CustomerService {
     return axios.put<Customer>(`${API_BASE_URL}/${id}`, customer);
   }
 
-  // PATCH - Partially update customer
-  patchCustomer(id: number, customer: Partial<Customer>) {
-    return axios.patch<Customer>(`${API_BASE_URL}/${id}`, customer);
+  // PATCH - Update customer verification status only
+  updateCustomerStatus(id: number, status: VerificationStatus) {
+    return axios.patch<Customer>(`${API_BASE_URL}/${id}/status`, { status });
   }
 
   // DELETE - Delete customer

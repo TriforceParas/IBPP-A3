@@ -9,15 +9,20 @@ import {
   message,
   Popconfirm,
   Typography,
-  Card
+  Card,
+  Dropdown,
+  Tag,
+  Select
 } from 'antd';
 import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
-  SearchOutlined
+  SearchOutlined,
+  DownOutlined,
+  UserOutlined
 } from '@ant-design/icons';
-import customerService, { type Customer } from '../services/customerService';
+import customerService, { type Customer, VERIFICATION_STATUS_OPTIONS, type VerificationStatus } from '../services/customerService';
 
 const { Title } = Typography;
 const { Search } = Input;
@@ -40,9 +45,9 @@ const CustomerManagement: React.FC = () => {
     setLoading(true);
     try {
       const response = await customerService.getAllCustomers();
+      console.log('Fetched customers with status:', response.data); // Debug log
       setCustomers(response.data);
       setFilteredCustomers(response.data);
-      message.success('Customers loaded successfully');
     } catch (error) {
       message.error('Failed to load customers');
       console.error('Error fetching customers:', error);
@@ -86,11 +91,9 @@ const CustomerManagement: React.FC = () => {
       if (editingCustomer) {
         // Update existing customer
         await customerService.updateCustomer(editingCustomer.id!, values);
-        message.success('Customer updated successfully');
       } else {
         // Create new customer
         await customerService.createCustomer(values);
-        message.success('Customer added successfully');
       }
       setIsModalVisible(false);
       form.resetFields();
@@ -105,11 +108,33 @@ const CustomerManagement: React.FC = () => {
   const handleDeleteCustomer = async (id: number) => {
     try {
       await customerService.deleteCustomer(id);
-      message.success('Customer deleted successfully');
       fetchCustomers(); // Refresh the list
     } catch (error) {
       message.error('Failed to delete customer');
       console.error('Error deleting customer:', error);
+    }
+  };
+
+  // Handle customer status update using PATCH method
+  const handleStatusUpdate = async (customerId: number, newStatus: VerificationStatus) => {
+    try {
+      await customerService.updateCustomerStatus(customerId, newStatus);
+      fetchCustomers(); // Refresh the list
+    } catch (error) {
+      message.error('Failed to update customer status');
+      console.error('Error updating customer status:', error);
+    }
+  };
+
+  // Get tag color based on verification status
+  const getStatusTagColor = (status: string) => {
+    switch (status) {
+      case 'Verified': return 'green';
+      case 'Not Verified': return 'default';
+      case 'Fraud': return 'red';
+      case 'Suspicious': return 'orange';
+      case 'Black Listed': return 'volcano';
+      default: return 'default';
     }
   };
 
@@ -143,37 +168,80 @@ const CustomerManagement: React.FC = () => {
       key: 'address',
     },
     {
+      title: 'Status',
+      dataIndex: 'verificationStatus',
+      key: 'verificationStatus',
+      width: 120,
+      render: (status: string, record: Customer) => {
+        const currentStatus = status || record.verificationStatus || 'Not Verified';
+        console.log('Rendering status for customer', record.id, ':', currentStatus); // Debug log
+        return (
+          <Tag color={getStatusTagColor(currentStatus)}>
+            {currentStatus}
+          </Tag>
+        );
+      },
+    },
+    {
       title: 'Actions',
       key: 'actions',
-      width: 150,
-      render: (_: any, record: Customer) => (
-        <Space size="small" className="action-buttons">
-          <Button
-            type="primary"
-            icon={<EditOutlined />}
-            size="small"
-            onClick={() => handleEditCustomer(record)}
-          >
-            Edit
-          </Button>
-          <Popconfirm
-            title="Delete Customer"
-            description="Are you sure you want to delete this customer?"
-            onConfirm={() => handleDeleteCustomer(record.id!)}
-            okText="Yes"
-            cancelText="No"
-            okType="danger"
-          >
-            <Button
-              danger
-              icon={<DeleteOutlined />}
-              size="small"
+      width: 120,
+      render: (_: any, record: Customer) => {
+        const currentStatus = record.verificationStatus || 'Not Verified';
+        const statusMenuItems = VERIFICATION_STATUS_OPTIONS
+          .filter(status => status !== currentStatus)
+          .map(status => ({
+            key: status,
+            label: status,
+            icon: <UserOutlined />,
+            onClick: () => {
+              console.log('Updating customer', record.id, 'from', currentStatus, 'to', status); // Debug log
+              handleStatusUpdate(record.id!, status);
+            },
+          }));
+
+        console.log('Customer', record.id, 'current status:', currentStatus, 'menu items:', statusMenuItems.length); // Debug log
+
+        return (
+          <Space direction="vertical" size="small" className="action-buttons" style={{ width: '100%' }}>
+            <Space size="small">
+              <Button
+                type="primary"
+                icon={<EditOutlined />}
+                size="small"
+                onClick={() => handleEditCustomer(record)}
+              >
+                Edit
+              </Button>
+              <Popconfirm
+                title="Delete Customer"
+                description="Are you sure you want to delete this customer?"
+                onConfirm={() => handleDeleteCustomer(record.id!)}
+                okText="Yes"
+                cancelText="No"
+                okType="danger"
+              >
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  size="small"
+                >
+                  Delete
+                </Button>
+              </Popconfirm>
+            </Space>
+            <Dropdown
+              menu={{ items: statusMenuItems }}
+              placement="bottomLeft"
+              disabled={statusMenuItems.length === 0}
             >
-              Delete
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+              <Button size="small" icon={<DownOutlined />} style={{ width: '100%' }}>
+                Update Status
+              </Button>
+            </Dropdown>
+          </Space>
+        );
+      },
     },
   ];
 
@@ -286,6 +354,20 @@ const CustomerManagement: React.FC = () => {
                 rows={3}
                 placeholder="Enter customer address"
               />
+            </Form.Item>
+
+            <Form.Item
+              label="Verification Status"
+              name="verificationStatus"
+              initialValue="Not Verified"
+            >
+              <Select placeholder="Select verification status">
+                {VERIFICATION_STATUS_OPTIONS.map(status => (
+                  <Select.Option key={status} value={status}>
+                    <Tag color={getStatusTagColor(status)}>{status}</Tag>
+                  </Select.Option>
+                ))}
+              </Select>
             </Form.Item>
 
             <Form.Item>

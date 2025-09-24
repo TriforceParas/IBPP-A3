@@ -13,6 +13,8 @@ public class Customer {
     @Column(name = "Address") private String address;
     @Column(name = "Phone No.") private String phoneNo;
     @Column(name = "Email") private String email;
+    @Column(name = "verification_status", nullable = false, columnDefinition = "VARCHAR(20) DEFAULT 'Not Verified'")
+    private String verificationStatus = "Not Verified";
 
     // Getters and Setters
     public Long getId() {
@@ -44,5 +46,11 @@ public class Customer {
     }
     public void setEmail(String email) {
         this.email = email;
+    }
+    public String getVerificationStatus() {
+        return verificationStatus;
+    }
+    public void setVerificationStatus(String verificationStatus) {
+        this.verificationStatus = verificationStatus;
     }
 }
