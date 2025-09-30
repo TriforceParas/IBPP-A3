@@ -27,8 +27,6 @@ public class CustomerController {
     @Autowired
     private CustomerService customerService;
 
-    // Added By : Drithi Chopra
-    // Date Added : 2025-08-23
     @GetMapping
     public ResponseEntity<List<Customer>> getAllCustomers() {
         try {
@@ -49,8 +47,6 @@ public class CustomerController {
         }
     }
 
-    // Added By : Paras Kumar Sharma
-    // Date Added : 2025-08-26
     @PostMapping
     public ResponseEntity<Customer> createCustomer(@RequestBody Customer customer) {
         try {
@@ -64,8 +60,6 @@ public class CustomerController {
         }
     }
 
-    // Added By : Chanchal Sah
-    // Date Added : 2025-08-28
     @PutMapping("/{id}")
     public ResponseEntity<Customer> updateCustomer(@PathVariable Long id,
                                                    @RequestBody Customer customerDetails) {
@@ -78,8 +72,6 @@ public class CustomerController {
         }
     }
 
-    // Added By : Paras Kumar Sharma
-    // Date Added : 2025-09-19
     @PatchMapping("/{id}/status")
     public ResponseEntity<Customer> updateCustomerStatus(@PathVariable Long id,
                                                         @RequestBody java.util.Map<String,
@@ -94,8 +86,6 @@ public class CustomerController {
         }
     }
 
-    // Added By : Ashwani S
-    // Date Added : 2025-09-03
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteCustomer(@PathVariable Long id) {
         try {
