@@ -88,31 +88,36 @@ pipeline {
             }
         }
         
-        stage('🛡️ Backend: OWASP Dependency Check') {
+stage('🛡️ Backend: OWASP Dependency Check') {
             steps {
                 echo '🛡️ Scanning backend dependencies...'
-                dir("${BACKEND_DIR}") {
-                    sh '''
-                        mkdir -p odc-reports
-                        docker run --rm \
-                        -v $(pwd):/src \
-                        -v $(pwd)/odc-reports:/report \
-                        owasp/dependency-check:latest \
-                        --scan /src \
-                        --format ALL \
-                        --project "Spring-Backend" \
-                        --out /report \
-                        --failOnCVSS 7 || true
-                    '''
+                // This block securely loads the NVD API Key from Jenkins Credentials
+                withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                    dir("${BACKEND_DIR}") {
+                        sh '''
+                            mkdir -p odc-reports
+                            docker run --rm \\
+                                -e NVD_API_KEY=${NVD_API_KEY} \\
+                                -v odc_data:/usr/share/dependency-check/data \\
+                                -v $(pwd):/src \\
+                                -v $(pwd)/odc-reports:/report \\
+                                owasp/dependency-check:latest \\
+                                --scan /src \\
+                                --format ALL \\
+                                --project "Spring-Backend" \\
+                                --out /report \\
+                                --failOnCVSS 7 || true
+                        '''
+                    }
                 }
             }
             post {
                 always {
                     publishHTML([
                         allowMissing: true,
-                        alwaysLinkToLastBuild: true,
+                        alwaysLinkToLastBuild: false,
                         keepAll: true,
-                        reportDir: 'odc-reports',
+                        reportDir: "${BACKEND_DIR}/odc-reports",
                         reportFiles: 'dependency-check-report.html',
                         reportName: 'Backend OWASP Dependency Check'
                     ])

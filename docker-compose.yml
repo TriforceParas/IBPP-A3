@@ -63,7 +63,9 @@ services:
 
   # ==================== CI/CD & SECURITY TOOLS ====================
   jenkins:
-    image: jenkins/jenkins:lts
+    build:
+      context: .
+      dockerfile: Dockerfile.jenkins
     container_name: jenkins
     privileged: true
     user: root
