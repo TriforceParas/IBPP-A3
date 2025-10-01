@@ -45,7 +45,15 @@ pipeline {
             steps {
                 echo '🧪 Running backend unit tests...'
                 dir("${BACKEND_DIR}") {
-                    sh 'mvn test'
+                    sh '''
+                        docker run --rm \\
+                            --network app-network \\
+                            -v $(pwd):/app \\
+                            -w /app \\
+                            -v /root/.m2:/root/.m2 \\
+                            maven:3.9-eclipse-temurin-17 \\
+                            mvn test
+                    '''
                 }
             }
             post {
