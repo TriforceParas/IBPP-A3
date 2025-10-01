@@ -88,6 +88,8 @@ services:
       sonar_db:
         condition: service_healthy
     environment:
+      SONAR_CE_JAVAOPTS: -Xmx4g  # Sets Compute Engine heap size to 4 Gigabytes
+      SONAR_WEB_JAVAOPTS: -Xmx4g  # Sets Web Server heap size to 4 Gigabytes
       SONAR_JDBC_URL: jdbc:postgresql://sonar_db:5432/sonar
       SONAR_JDBC_USERNAME: sonar
       SONAR_JDBC_PASSWORD: sonar
