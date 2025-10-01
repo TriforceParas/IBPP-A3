@@ -15,13 +15,19 @@ services:
       - mysql_data:/var/lib/mysql
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   app:
     build: .
     container_name: spring_app
     restart: on-failure
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
@@ -32,6 +38,12 @@ services:
     networks:
       - app-network
       - monitoring-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   frontend:
     build:
@@ -62,21 +74,24 @@ services:
     volumes:
       - jenkins_home:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
-      - /usr/bin/docker:/usr/bin/docker
     networks:
       - app-network
       - monitoring-network
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
 
   sonarqube:
     image: sonarqube:community
     container_name: sonarqube
     restart: unless-stopped
     depends_on:
-      - sonar_db
+      sonar_db:
+        condition: service_healthy
     environment:
       SONAR_JDBC_URL: jdbc:postgresql://sonar_db:5432/sonar
       SONAR_JDBC_USERNAME: sonar
       SONAR_JDBC_PASSWORD: sonar
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
     ports:
       - "9000:9000"
     volumes:
@@ -85,6 +100,10 @@ services:
       - sonarqube_logs:/opt/sonarqube/logs
     networks:
       - app-network
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
 
   sonar_db:
     image: postgres:13
@@ -98,6 +117,11 @@ services:
       - sonar_db_data:/var/lib/postgresql/data
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonar"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   owasp-zap:
     image: ghcr.io/zaproxy/zaproxy:stable
@@ -113,12 +137,13 @@ services:
   trivy:
     image: aquasec/trivy:latest
     container_name: trivy
-    restart: unless-stopped
+    restart: "no"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - trivy_cache:/root/.cache/
     networks:
       - app-network
+    entrypoint: ["/bin/sh", "-c", "sleep infinity"]
 
   # ==================== MONITORING STACK ====================
   prometheus:
@@ -128,7 +153,7 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -138,6 +163,7 @@ services:
       - '--web.enable-lifecycle'
     networks:
       - monitoring-network
+    user: "nobody"
 
   grafana:
     image: grafana/grafana:latest
@@ -149,13 +175,14 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
     depends_on:
       - prometheus
     networks:
       - monitoring-network
+    user: "472"
 
   loki:
     image: grafana/loki:latest
@@ -164,7 +191,6 @@ services:
     ports:
       - "3100:3100"
     volumes:
-      - ./loki/loki-config.yml:/etc/loki/local-config.yaml
       - loki_data:/loki
     command: -config.file=/etc/loki/local-config.yaml
     networks:
@@ -175,10 +201,9 @@ services:
     container_name: promtail
     restart: unless-stopped
     volumes:
-      - ./promtail/promtail-config.yml:/etc/promtail/config.yml
-      - /var/log:/var/log
+      - /var/log:/var/log:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     command: -config.file=/etc/promtail/config.yml
     depends_on:
       - loki
@@ -200,6 +225,8 @@ services:
     privileged: true
     networks:
       - monitoring-network
+    devices:
+      - /dev/kmsg
 
   node-exporter:
     image: prom/node-exporter:latest
