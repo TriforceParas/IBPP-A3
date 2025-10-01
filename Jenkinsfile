@@ -3,7 +3,6 @@ pipeline {
     
     environment {
         SONARQUBE_URL = 'http://sonarqube:9000'
-        SONAR_TOKEN = credentials('sonarqube-token')
         DOCKER_COMPOSE_FILE = 'docker-compose.yml'
         BACKEND_DIR = '.'
         FRONTEND_DIR = 'frontend'
@@ -20,10 +19,10 @@ pipeline {
             steps {
                 echo '📥 Pulling latest code from GitHub...'
                 checkout scm
-                sh '''
-                    echo "Current commit: $(git rev-parse --short HEAD)"
-                    echo "Branch: $(git branch --show-current)"
-                '''
+                sh """
+                    echo "Current commit: \$(git rev-parse --short HEAD)"
+                    echo "Branch: \$(git branch --show-current)"
+                """
             }
         }
         
@@ -33,10 +32,10 @@ pipeline {
             steps {
                 echo '🔨 Building Spring Boot Backend...'
                 dir("${BACKEND_DIR}") {
-                    sh '''
+                    sh """
                         mvn clean
                         mvn compile -DskipTests
-                    '''
+                    """
                 }
             }
         }
@@ -60,13 +59,16 @@ pipeline {
                 echo '📊 Running SonarQube analysis on backend...'
                 dir("${BACKEND_DIR}") {
                     withSonarQubeEnv('SonarQube') {
-                        sh '''
-                            mvn sonar:sonar \
-                            -Dsonar.projectKey=spring-backend \
-                            -Dsonar.projectName="Spring Backend" \
-                            -Dsonar.host.url=${SONARQUBE_URL} \
-                            -Dsonar.login=${SONAR_TOKEN}
-                        '''
+                        // Use withCredentials for the token
+                        withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN_VAR')]) {
+                            sh """
+                                mvn sonar:sonar \\
+                                -Dsonar.projectKey=spring-backend \\
+                                -Dsonar.projectName="Spring Backend" \\
+                                -Dsonar.host.url=${SONARQUBE_URL} \\
+                                -Dsonar.token=${SONAR_TOKEN_VAR}
+                            """
+                        }
                     }
                 }
             }
@@ -75,7 +77,7 @@ pipeline {
         stage('⏳ Backend: Quality Gate') {
             steps {
                 echo '⏳ Waiting for backend Quality Gate...'
-                timeout(time: 5, unit: 'MINUTES') {
+                timeout(time: 15, unit: 'MINUTES') {
                     script {
                         def qg = waitForQualityGate()
                         if (qg.status != 'OK') {
@@ -93,11 +95,10 @@ pipeline {
                 echo '🛡️ Scanning backend dependencies...'
                 withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
                     dir("${BACKEND_DIR}") {
-                        // Change from single quotes to double quotes
                         sh """
                             mkdir -p odc-reports
                             docker run --rm \\
-                                -e NVD_API_KEY=${env.NVD_API_KEY} \\
+                                -e NVD_API_KEY=${NVD_API_KEY} \\
                                 -v odc_data:/usr/share/dependency-check/data \\
                                 -v \$(pwd):/src \\
                                 -v \$(pwd)/odc-reports:/report \\
@@ -138,10 +139,10 @@ pipeline {
             steps {
                 echo '🐳 Building backend Docker image...'
                 dir("${BACKEND_DIR}") {
-                    sh '''
+                    sh """
                         docker build -t spring-backend:latest .
                         docker tag spring-backend:latest spring-backend:${BUILD_NUMBER}
-                    '''
+                    """
                 }
             }
         }
@@ -149,22 +150,22 @@ pipeline {
         stage('🔒 Backend: Trivy Image Scan') {
             steps {
                 echo '🔒 Scanning backend Docker image with Trivy...'
-                sh '''
-                    docker run --rm \
-                    -v /var/run/docker.sock:/var/run/docker.sock \
-                    aquasec/trivy:latest image \
-                    --severity HIGH,CRITICAL \
-                    --format table \
-                    spring-backend:latest
-                    
+                sh """
+                    docker run --rm \\
+                        -v /var/run/docker.sock:/var/run/docker.sock \\
+                        aquasec/trivy:latest image \\
+                        --severity HIGH,CRITICAL \\
+                        --format table \\
+                        spring-backend:latest
+
                     # Check for vulnerabilities (non-blocking for demo)
-                    docker run --rm \
-                    -v /var/run/docker.sock:/var/run/docker.sock \
-                    aquasec/trivy:latest image \
-                    --severity HIGH,CRITICAL \
-                    --exit-code 0 \
-                    spring-backend:latest
-                '''
+                    docker run --rm \\
+                        -v /var/run/docker.sock:/var/run/docker.sock \\
+                        aquasec/trivy:latest image \\
+                        --severity HIGH,CRITICAL \\
+                        --exit-code 0 \\
+                        spring-backend:latest
+                """
             }
         }
         
@@ -174,10 +175,10 @@ pipeline {
             steps {
                 echo '🧹 Installing frontend dependencies...'
                 dir("${FRONTEND_DIR}") {
-                    sh '''
+                    sh """
                         rm -rf node_modules package-lock.json
                         npm install
-                    '''
+                    """
                 }
             }
         }
@@ -186,15 +187,15 @@ pipeline {
             steps {
                 echo '🔍 Auditing frontend dependencies...'
                 dir("${FRONTEND_DIR}") {
-                    sh '''
+                    sh """
                         npm audit --production --audit-level=high || true
                         npm audit --json > npm-audit-report.json || true
-                    '''
+                    """
                 }
             }
             post {
                 always {
-                    archiveArtifacts artifacts: 'frontend/npm-audit-report.json', allowEmptyArchive: true
+                    archiveArtifacts artifacts: "${FRONTEND_DIR}/npm-audit-report.json", allowEmptyArchive: true
                 }
             }
         }
@@ -203,17 +204,17 @@ pipeline {
             steps {
                 echo '🧪 Running ESLint security checks...'
                 dir("${FRONTEND_DIR}") {
-                    sh '''
+                    sh """
                         # Install security plugins if not present
                         npm install --save-dev eslint-plugin-security eslint-plugin-no-secrets || true
                         
                         # Run ESLint
-                        npx eslint . --ext .js,.jsx,.ts,.tsx \
-                        --format html \
+                        npx eslint . --ext .js,.jsx,.ts,.tsx \\
+                        --format html \\
                         --output-file eslint-report.html || true
                         
                         npx eslint . --ext .js,.jsx,.ts,.tsx || true
-                    '''
+                    """
                 }
             }
             post {
@@ -222,7 +223,7 @@ pipeline {
                         allowMissing: true,
                         alwaysLinkToLastBuild: true,
                         keepAll: true,
-                        reportDir: 'frontend',
+                        reportDir: "${FRONTEND_DIR}",
                         reportFiles: 'eslint-report.html',
                         reportName: 'Frontend ESLint Security Report'
                     ])
@@ -234,16 +235,16 @@ pipeline {
             steps {
                 echo '📊 Running SonarQube analysis on frontend...'
                 dir("${FRONTEND_DIR}") {
-                    script {
-                        def scannerHome = tool 'SonarScanner'
-                        withSonarQubeEnv('SonarQube') {
+                    withSonarQubeEnv('SonarQube') {
+                        withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN_VAR')]) {
+                            def scannerHome = tool 'SonarScanner'
                             sh """
-                                ${scannerHome}/bin/sonar-scanner \
-                                -Dsonar.projectKey=react-frontend \
-                                -Dsonar.projectName="React Frontend" \
-                                -Dsonar.sources=src \
-                                -Dsonar.host.url=${SONARQUBE_URL} \
-                                -Dsonar.login=${SONAR_TOKEN} \
+                                ${scannerHome}/bin/sonar-scanner \\
+                                -Dsonar.projectKey=react-frontend \\
+                                -Dsonar.projectName="React Frontend" \\
+                                -Dsonar.sources=src \\
+                                -Dsonar.host.url=${SONARQUBE_URL} \\
+                                -Dsonar.token=${SONAR_TOKEN_VAR} \\
                                 -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
                             """
                         }
@@ -255,7 +256,7 @@ pipeline {
         stage('⏳ Frontend: Quality Gate') {
             steps {
                 echo '⏳ Waiting for frontend Quality Gate...'
-                timeout(time: 5, unit: 'MINUTES') {
+                timeout(time: 15, unit: 'MINUTES') {
                     script {
                         def qg = waitForQualityGate()
                         if (qg.status != 'OK') {
@@ -271,19 +272,23 @@ pipeline {
         stage('🛡️ Frontend: OWASP Dependency Check') {
             steps {
                 echo '🛡️ Scanning frontend dependencies...'
-                dir("${FRONTEND_DIR}") {
-                    sh '''
-                        mkdir -p odc-reports
-                        docker run --rm \
-                        -v $(pwd):/src \
-                        -v $(pwd)/odc-reports:/report \
-                        owasp/dependency-check:latest \
-                        --scan /src/package.json \
-                        --format ALL \
-                        --project "React-Frontend" \
-                        --out /report \
-                        --failOnCVSS 7 || true
-                    '''
+                 withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                    dir("${FRONTEND_DIR}") {
+                        sh """
+                            mkdir -p odc-reports
+                            docker run --rm \\
+                                -e NVD_API_KEY=${NVD_API_KEY} \\
+                                -v odc_frontend_data:/usr/share/dependency-check/data \\
+                                -v \$(pwd):/src \\
+                                -v \$(pwd)/odc-reports:/report \\
+                                owasp/dependency-check:latest \\
+                                --scan /src/package.json \\
+                                --format ALL \\
+                                --project "React-Frontend" \\
+                                --out /report \\
+                                --failOnCVSS 7 || true
+                        """
+                    }
                 }
             }
             post {
@@ -292,7 +297,7 @@ pipeline {
                         allowMissing: true,
                         alwaysLinkToLastBuild: true,
                         keepAll: true,
-                        reportDir: 'frontend/odc-reports',
+                        reportDir: "${FRONTEND_DIR}/odc-reports",
                         reportFiles: 'dependency-check-report.html',
                         reportName: 'Frontend OWASP Dependency Check'
                     ])
@@ -304,11 +309,11 @@ pipeline {
             steps {
                 echo '🔒 Scanning for exposed secrets...'
                 dir("${FRONTEND_DIR}") {
-                    sh '''
-                        docker run --rm \
-                        -v $(pwd):/code \
-                        trufflesecurity/trufflehog:latest \
-                        filesystem /code \
+                    sh """
+                        docker run --rm \\
+                        -v \$(pwd):/code \\
+                        trufflesecurity/trufflehog:latest \\
+                        filesystem /code \\
                         --json > secrets-report.json || true
                         
                         if [ -s secrets-report.json ]; then
@@ -317,12 +322,12 @@ pipeline {
                         else
                             echo "✅ No secrets detected"
                         fi
-                    '''
+                    """
                 }
             }
             post {
                 always {
-                    archiveArtifacts artifacts: 'frontend/secrets-report.json', allowEmptyArchive: true
+                    archiveArtifacts artifacts: "${FRONTEND_DIR}/secrets-report.json", allowEmptyArchive: true
                 }
             }
         }
@@ -340,7 +345,7 @@ pipeline {
                         allowMissing: true,
                         alwaysLinkToLastBuild: true,
                         keepAll: true,
-                        reportDir: 'frontend/coverage/lcov-report',
+                        reportDir: "${FRONTEND_DIR}/coverage/lcov-report",
                         reportFiles: 'index.html',
                         reportName: 'Frontend Code Coverage Report'
                     ])
@@ -361,10 +366,10 @@ pipeline {
             steps {
                 echo '🐳 Building frontend Docker image...'
                 dir("${FRONTEND_DIR}") {
-                    sh '''
+                    sh """
                         docker build -t react-frontend:latest .
                         docker tag react-frontend:latest react-frontend:${BUILD_NUMBER}
-                    '''
+                    """
                 }
             }
         }
@@ -372,22 +377,22 @@ pipeline {
         stage('🔒 Frontend: Trivy Image Scan') {
             steps {
                 echo '🔒 Scanning frontend Docker image with Trivy...'
-                sh '''
-                    docker run --rm \
-                    -v /var/run/docker.sock:/var/run/docker.sock \
-                    aquasec/trivy:latest image \
-                    --severity HIGH,CRITICAL \
-                    --format table \
-                    react-frontend:latest
-                    
+                sh """
+                    docker run --rm \\
+                        -v /var/run/docker.sock:/var/run/docker.sock \\
+                        aquasec/trivy:latest image \\
+                        --severity HIGH,CRITICAL \\
+                        --format table \\
+                        react-frontend:latest
+                        
                     # Check for vulnerabilities (non-blocking for demo)
-                    docker run --rm \
-                    -v /var/run/docker.sock:/var/run/docker.sock \
-                    aquasec/trivy:latest image \
-                    --severity HIGH,CRITICAL \
-                    --exit-code 0 \
-                    react-frontend:latest
-                '''
+                    docker run --rm \\
+                        -v /var/run/docker.sock:/var/run/docker.sock \\
+                        aquasec/trivy:latest image \\
+                        --severity HIGH,CRITICAL \\
+                        --exit-code 0 \\
+                        react-frontend:latest
+                """
             }
         }
         
@@ -396,51 +401,49 @@ pipeline {
         stage('🚀 Deploy to Production') {
             steps {
                 echo '🚀 Deploying full stack to production containers...'
-                script {
-                    sh '''
-                        echo "Stopping old containers..."
-                        docker-compose -f ${DOCKER_COMPOSE_FILE} stop app frontend
-                        docker-compose -f ${DOCKER_COMPOSE_FILE} rm -f app frontend
-                        
-                        echo "Starting database (if not running)..."
-                        docker-compose -f ${DOCKER_COMPOSE_FILE} up -d db
-                        sleep 10
-                        
-                        echo "Deploying backend..."
-                        docker-compose -f ${DOCKER_COMPOSE_FILE} up -d app
-                        sleep 30
-                        
-                        echo "Deploying frontend..."
-                        docker-compose -f ${DOCKER_COMPOSE_FILE} up -d frontend
-                        sleep 20
-                        
-                        echo "✅ Deployment completed!"
-                    '''
-                }
+                sh """
+                    echo "Stopping old containers..."
+                    docker-compose -f ${DOCKER_COMPOSE_FILE} stop app frontend
+                    docker-compose -f ${DOCKER_COMPOSE_FILE} rm -f app frontend
+                    
+                    echo "Starting database (if not running)..."
+                    docker-compose -f ${DOCKER_COMPOSE_FILE} up -d db
+                    sleep 10
+                    
+                    echo "Deploying backend..."
+                    docker-compose -f ${DOCKER_COMPOSE_FILE} up -d app
+                    sleep 30
+                    
+                    echo "Deploying frontend..."
+                    docker-compose -f ${DOCKER_COMPOSE_FILE} up -d frontend
+                    sleep 20
+                    
+                    echo "✅ Deployment completed!"
+                """
             }
         }
         
         stage('🧪 Post-Deployment Health Checks') {
             steps {
                 echo '🧪 Running health checks...'
-                sh '''
+                sh """
                     echo "Checking backend health..."
-                    curl -f http://localhost:8080/actuator/health || exit 1
+                    curl -f http://app:8080/actuator/health || exit 1
                     
                     echo "Checking database connectivity..."
-                    curl -f http://localhost:8080/actuator/health/db || exit 1
+                    curl -f http://app:8080/actuator/health/db || exit 1
                     
                     echo "Checking frontend accessibility..."
-                    response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000)
-                    if [ $response -eq 200 ]; then
+                    response=\$(curl -s -o /dev/null -w "%{http_code}" http://frontend:3000)
+                    if [ \$response -eq 200 ]; then
                         echo "✅ Frontend is accessible"
                     else
-                        echo "❌ Frontend returned status code: $response"
+                        echo "❌ Frontend returned status code: \$response"
                         exit 1
                     fi
                     
                     echo "✅ All health checks passed!"
-                '''
+                """
             }
         }
         
@@ -449,29 +452,31 @@ pipeline {
                 stage('Backend DAST') {
                     steps {
                         echo '📈 Running DAST scan on backend API...'
-                        sh '''
-                            docker run --rm \
-                            --network host \
-                            ghcr.io/zaproxy/zaproxy:stable \
-                            zap-baseline.py \
-                            -t http://localhost:8080 \
-                            -r zap-backend-report.html \
-                            -w zap-backend-report.md || true
-                        '''
+                        sh """
+                            docker run --rm \\
+                                --network app-network \\
+                                -v \$(pwd):/zap/wrk \\
+                                ghcr.io/zaproxy/zaproxy:stable \\
+                                zap-baseline.py \\
+                                -t http://app:8080 \\
+                                -r zap-backend-report.html \\
+                                -w zap-backend-report.md || true
+                        """
                     }
                 }
                 stage('Frontend DAST') {
                     steps {
                         echo '📈 Running DAST scan on frontend...'
-                        sh '''
-                            docker run --rm \
-                            --network host \
-                            ghcr.io/zaproxy/zaproxy:stable \
-                            zap-baseline.py \
-                            -t http://localhost:3000 \
-                            -r zap-frontend-report.html \
-                            -w zap-frontend-report.md || true
-                        '''
+                        sh """
+                            docker run --rm \\
+                                --network app-network \\
+                                -v \$(pwd):/zap/wrk \\
+                                ghcr.io/zaproxy/zaproxy:stable \\
+                                zap-baseline.py \\
+                                -t http://frontend:3000 \\
+                                -r zap-frontend-report.html \\
+                                -w zap-frontend-report.md || true
+                        """
                     }
                 }
             }
@@ -500,7 +505,7 @@ pipeline {
         stage('📊 Generate Security Summary') {
             steps {
                 echo '📊 Generating security summary report...'
-                sh '''
+                sh """
                     echo "=====================================" > security-summary.txt
                     echo "SECURITY SCAN SUMMARY - Build #${BUILD_NUMBER}" >> security-summary.txt
                     echo "=====================================" >> security-summary.txt
@@ -515,7 +520,7 @@ pipeline {
                     echo "=====================================" >> security-summary.txt
                     
                     cat security-summary.txt
-                '''
+                """
             }
             post {
                 always {
@@ -527,25 +532,25 @@ pipeline {
     
     post {
         success {
-            echo '''
+            echo """
             ✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅
             ✅  PIPELINE COMPLETED SUCCESSFULLY!   ✅
             ✅  Full Stack Deployed to Production  ✅
             ✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅
             
             📊 View Reports:
-               - SonarQube: http://localhost:9000
-               - Grafana: http://localhost:3001
-               - Prometheus: http://localhost:9090
-               
+                - SonarQube: http://localhost:9000
+                - Grafana: http://localhost:3001
+                - Prometheus: http://localhost:9090
+                
             🌐 Application URLs:
-               - Frontend: http://localhost:3000
-               - Backend: http://localhost:8080
-               - API Docs: http://localhost:8080/swagger-ui.html
-            '''
+                - Frontend: http://localhost:3000
+                - Backend: http://localhost:8080
+                - API Docs: http://localhost:8080/swagger-ui.html
+            """
         }
         failure {
-            echo '''
+            echo """
             ❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌
             ❌  PIPELINE FAILED!                 ❌
             ❌  Security issues or build errors  ❌
@@ -554,21 +559,20 @@ pipeline {
             
             🔍 Check the logs above for details
             📧 Notify security team immediately
-            '''
+            """
             
-            // Optional: Rollback to previous version
-            sh '''
+            sh """
                 echo "Rolling back to previous stable version..."
                 docker-compose -f ${DOCKER_COMPOSE_FILE} down
                 # Add rollback logic here if needed
-            '''
+            """
         }
         always {
             echo '🧹 Cleaning up temporary files...'
-            sh '''
+            sh """
                 # Clean up reports older than 7 days
                 find . -name "*-report.*" -type f -mtime +7 -delete || true
-            '''
+            """
         }
     }
 }
