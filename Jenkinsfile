@@ -6,24 +6,7 @@ pipeline {
         SONAR_TOKEN = credentials('sonarqube-token')
         DOCKER_COMPOSE_FILE = 'docker-compose.yml'
         BACKEND_DIR = '.'
-        FRONTEN                echo '📊 Running SonarQube analysis on frontend...'
-                dir("${FRONTEND_DIR}") {
-                    withSonarQubeEnv('SonarQube') {
-                        sh '''
-                            # Use Docker-based SonarScanner instead of tool
-                            docker run --rm \
-                                --network host \
-                                -v $(pwd):/usr/src \
-                                sonarsource/sonar-scanner-cli:latest \
-                                -Dsonar.projectKey=react-frontend \
-                                -Dsonar.projectName="React Frontend" \
-                                -Dsonar.sources=src \
-                                -Dsonar.host.url=${SONARQUBE_URL} \
-                                -Dsonar.login=${SONAR_TOKEN} \
-                                -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info || echo "SonarQube scan completed"
-                        '''
-                    }
-                }'
+        FRONTEND_DIR = 'frontend'
     }
     
     tools {
