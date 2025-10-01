@@ -93,21 +93,22 @@ pipeline {
                 echo '🛡️ Scanning backend dependencies...'
                 withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
                     dir("${BACKEND_DIR}") {
-                        // Change from single quotes to double quotes
-                        sh """
-                            mkdir -p odc-reports
-                            docker run --rm \\
-                                -e NVD_API_KEY=${env.NVD_API_KEY} \\
-                                -v odc_data:/usr/share/dependency-check/data \\
-                                -v \$(pwd):/src \\
-                                -v \$(pwd)/odc-reports:/report \\
-                                owasp/dependency-check:latest \\
-                                --scan /src \\
-                                --format ALL \\
-                                --project "Spring-Backend" \\
-                                --out /report \\
-                                --failOnCVSS 7 || true
-                        """
+                        script {
+                            sh '''
+                                mkdir -p odc-reports
+                                docker run --rm \
+                                    -e NVD_API_KEY="''' + env.NVD_API_KEY + '''" \
+                                    -v odc_data:/usr/share/dependency-check/data \
+                                    -v $(pwd):/src \
+                                    -v $(pwd)/odc-reports:/report \
+                                    owasp/dependency-check:latest \
+                                    --scan /src \
+                                    --format ALL \
+                                    --project "Spring-Backend" \
+                                    --out /report \
+                                    --failOnCVSS 7 || true
+                            '''
+                        }
                     }
                 }
             }
@@ -271,19 +272,25 @@ pipeline {
         stage('🛡️ Frontend: OWASP Dependency Check') {
             steps {
                 echo '🛡️ Scanning frontend dependencies...'
-                dir("${FRONTEND_DIR}") {
-                    sh '''
-                        mkdir -p odc-reports
-                        docker run --rm \
-                        -v $(pwd):/src \
-                        -v $(pwd)/odc-reports:/report \
-                        owasp/dependency-check:latest \
-                        --scan /src/package.json \
-                        --format ALL \
-                        --project "React-Frontend" \
-                        --out /report \
-                        --failOnCVSS 7 || true
-                    '''
+                withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                    dir("${FRONTEND_DIR}") {
+                        script {
+                            sh '''
+                                mkdir -p odc-reports
+                                docker run --rm \
+                                    -e NVD_API_KEY="''' + env.NVD_API_KEY + '''" \
+                                    -v odc_frontend_data:/usr/share/dependency-check/data \
+                                    -v $(pwd):/src \
+                                    -v $(pwd)/odc-reports:/report \
+                                    owasp/dependency-check:latest \
+                                    --scan /src/package.json \
+                                    --format ALL \
+                                    --project "React-Frontend" \
+                                    --out /report \
+                                    --failOnCVSS 7 || true
+                            '''
+                        }
+                    }
                 }
             }
             post {
