@@ -88,26 +88,26 @@ pipeline {
             }
         }
         
-stage('🛡️ Backend: OWASP Dependency Check') {
+        stage('🛡️ Backend: OWASP Dependency Check') {
             steps {
                 echo '🛡️ Scanning backend dependencies...'
-                // This block securely loads the NVD API Key from Jenkins Credentials
                 withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
                     dir("${BACKEND_DIR}") {
-                        sh '''
+                        // Change from single quotes to double quotes
+                        sh """
                             mkdir -p odc-reports
                             docker run --rm \\
                                 -e NVD_API_KEY=${NVD_API_KEY} \\
                                 -v odc_data:/usr/share/dependency-check/data \\
-                                -v $(pwd):/src \\
-                                -v $(pwd)/odc-reports:/report \\
+                                -v \$(pwd):/src \\
+                                -v \$(pwd)/odc-reports:/report \\
                                 owasp/dependency-check:latest \\
                                 --scan /src \\
                                 --format ALL \\
                                 --project "Spring-Backend" \\
                                 --out /report \\
                                 --failOnCVSS 7 || true
-                        '''
+                        """
                     }
                 }
             }
@@ -124,7 +124,7 @@ stage('🛡️ Backend: OWASP Dependency Check') {
                 }
             }
         }
-        
+                
         stage('📦 Backend: Package JAR') {
             steps {
                 echo '📦 Packaging backend application...'
