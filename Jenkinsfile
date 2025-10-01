@@ -94,10 +94,17 @@ pipeline {
                 withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
                     dir("${BACKEND_DIR}") {
                         script {
+                            // Write API key to file to avoid masking issues
+                            writeFile file: 'nvd_api_key.txt', text: env.NVD_API_KEY
                             sh '''
                                 mkdir -p odc-reports
+                                
+                                # Read API key from file
+                                API_KEY=$(cat nvd_api_key.txt)
+                                
+                                # Run dependency check with API key
                                 docker run --rm \
-                                    -e NVD_API_KEY="''' + env.NVD_API_KEY + '''" \
+                                    -e NVD_API_KEY="$API_KEY" \
                                     -v odc_data:/usr/share/dependency-check/data \
                                     -v $(pwd):/src \
                                     -v $(pwd)/odc-reports:/report \
@@ -106,7 +113,11 @@ pipeline {
                                     --format ALL \
                                     --project "Spring-Backend" \
                                     --out /report \
+                                    --nvdApiKey "$API_KEY" \
                                     --failOnCVSS 7 || true
+                                
+                                # Clean up API key file
+                                rm -f nvd_api_key.txt
                             '''
                         }
                     }
@@ -275,10 +286,17 @@ pipeline {
                 withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
                     dir("${FRONTEND_DIR}") {
                         script {
+                            // Write API key to file to avoid masking issues
+                            writeFile file: 'nvd_api_key.txt', text: env.NVD_API_KEY
                             sh '''
                                 mkdir -p odc-reports
+                                
+                                # Read API key from file
+                                API_KEY=$(cat nvd_api_key.txt)
+                                
+                                # Run dependency check with API key
                                 docker run --rm \
-                                    -e NVD_API_KEY="''' + env.NVD_API_KEY + '''" \
+                                    -e NVD_API_KEY="$API_KEY" \
                                     -v odc_frontend_data:/usr/share/dependency-check/data \
                                     -v $(pwd):/src \
                                     -v $(pwd)/odc-reports:/report \
@@ -287,7 +305,11 @@ pipeline {
                                     --format ALL \
                                     --project "React-Frontend" \
                                     --out /report \
+                                    --nvdApiKey "$API_KEY" \
                                     --failOnCVSS 7 || true
+                                
+                                # Clean up API key file
+                                rm -f nvd_api_key.txt
                             '''
                         }
                     }
