@@ -12,7 +12,7 @@ pipeline {
     tools {
         maven 'Maven-3.9'
         jdk 'JDK-17'
-        nodejs 'NodeJS-24'
+        nodejs 'NodeJS-22'
     }
     
     stages {
@@ -606,20 +606,32 @@ pipeline {
             📧 Notify security team immediately
             '''
             
-            // Optional: Rollback to previous version using Docker directly
-            sh '''
-                echo "Rolling back to previous stable version..."
-                docker stop app frontend || true
-                docker rm app frontend || true
-                # Add rollback logic here if needed
-            '''
+            script {
+                try {
+                    // Optional: Rollback to previous version using Docker directly
+                    sh '''
+                        echo "Rolling back to previous stable version..."
+                        docker stop app frontend || true
+                        docker rm app frontend || true
+                        # Add rollback logic here if needed
+                    '''
+                } catch (Exception e) {
+                    echo "Rollback failed: ${e.getMessage()}"
+                }
+            }
         }
         always {
-            echo '🧹 Cleaning up temporary files...'
-            sh '''
-                # Clean up reports older than 7 days
-                find . -name "*-report.*" -type f -mtime +7 -delete || true
-            '''
+            script {
+                try {
+                    echo '🧹 Cleaning up temporary files...'
+                    sh '''
+                        # Clean up reports older than 7 days
+                        find . -name "*-report.*" -type f -mtime +7 -delete || true
+                    '''
+                } catch (Exception e) {
+                    echo "Cleanup failed: ${e.getMessage()}"
+                }
+            }
         }
     }
 }
