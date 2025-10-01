@@ -529,7 +529,7 @@ pipeline {
             ✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅
             
             📊 View Reports:
-               - SonarQube: http://localhost:9000
+               - SonarQube: http://sonarqube:9000
                - Grafana: http://localhost:3001
                - Prometheus: http://localhost:9090
                
