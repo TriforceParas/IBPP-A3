@@ -97,7 +97,7 @@ pipeline {
                         sh """
                             mkdir -p odc-reports
                             docker run --rm \\
-                                -e NVD_API_KEY=${NVD_API_KEY} \\
+                                -e NVD_API_KEY=${env.NVD_API_KEY} \\
                                 -v odc_data:/usr/share/dependency-check/data \\
                                 -v \$(pwd):/src \\
                                 -v \$(pwd)/odc-reports:/report \\
